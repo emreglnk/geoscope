@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoScope Admin Panel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .table-container {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .status-won { background-color: #10b981; color: white; }
+        .status-negotiating { background-color: #fbbf24; color: white; }
+        .status-upcoming { background-color: #fb923c; color: white; }
+        .status-lost { background-color: #ef4444; color: white; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-6">
+        <!-- Header -->
+        <header class="mb-8">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-800">GeoScope Admin Panel</h1>
+                    <p class="text-gray-600 mt-2">İhale Durumu Veri Yönetimi</p>
+                </div>
+                <div class="space-x-3">
+                    <a href="index.html" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                        🗺️ Haritaya Dön
+                    </a>
+                    <button id="refresh-data" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                        🔄 Veriyi Yenile
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Statistics Cards -->
+            <div id="stats-container" class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <div class="text-2xl font-bold text-green-600" id="stats-won">-</div>
+                    <div class="text-sm text-gray-600">Alınan İhaleler</div>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <div class="text-2xl font-bold text-yellow-600" id="stats-negotiating">-</div>
+                    <div class="text-sm text-gray-600">Görüşmesi Devam Eden</div>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <div class="text-2xl font-bold text-orange-600" id="stats-upcoming">-</div>
+                    <div class="text-sm text-gray-600">İhaleye Çıkacak</div>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <div class="text-2xl font-bold text-red-600" id="stats-lost">-</div>
+                    <div class="text-sm text-gray-600">Olumsuzlar</div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Add New District Form -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-xl font-bold mb-4">Yeni İlçe Verisi Ekle</h2>
+            <form id="add-district-form" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">İlçe ID</label>
+                    <input type="text" name="districtId" required class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500" placeholder="örn: 1975">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">İl</label>
+                    <input type="text" name="province" required class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500" placeholder="örn: İstanbul">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">İlçe</label>
+                    <input type="text" name="district" required class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500" placeholder="örn: Beyoğlu">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Durum</label>
+                    <select name="status" required class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500">
+                        <option value="">Durum Seçin</option>
+                        <option value="won">Alınan</option>
+                        <option value="negotiating">Görüşmesi Devam Eden</option>
+                        <option value="upcoming">İhaleye Çıkacak</option>
+                        <option value="lost">Olumsuz</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">İhale Süresi</label>
+                    <input type="text" name="tender_duration" required class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500" placeholder="örn: 36 ay">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Toplam Kabin</label>
+                    <input type="number" name="cabin_count_total" required class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500" placeholder="örn: 25">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Dolu Kabin</label>
+                    <input type="number" name="cabin_count_full" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500" placeholder="örn: 18">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Kira Bedeli</label>
+                    <input type="text" name="rental_fee" required class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500" placeholder="örn: ₺15,000/ay">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Son Görüşme/İhale Tarihi</label>
+                    <input type="date" name="meeting_date" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500">
+                </div>
+                
+                <div class="md:col-span-2 lg:col-span-3">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Toplantı Notları</label>
+                    <textarea name="meeting_notes" rows="3" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500" placeholder="Detaylı açıklama..."></textarea>
+                </div>
+                
+                <div class="md:col-span-2 lg:col-span-3">
+                    <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                        ➕ Yeni İlçe Ekle
+                    </button>
+                    <button type="reset" class="ml-3 px-6 py-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500 transition-colors">
+                        🗑️ Temizle
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Districts Table -->
+        <div class="bg-white rounded-lg shadow-lg">
+            <div class="p-6 border-b border-gray-200">
+                <h2 class="text-xl font-bold">Mevcut İlçe Verileri</h2>
+            </div>
+            <div class="table-container">
+                <table class="w-full">
+                    <thead class="bg-gray-50 sticky top-0">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">İl/İlçe</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Durum</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kabin</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kira</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody id="districts-table" class="divide-y divide-gray-200">
+                        <!-- Districts will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="loading" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+            <div class="bg-white p-6 rounded-lg">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                <p class="mt-2 text-gray-600">İşlem yapılıyor...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div id="edit-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
+            <div class="flex justify-between items-center p-6 border-b border-gray-200">
+                <h2 class="text-xl font-bold text-gray-800">İlçe Verisini Düzenle</h2>
+                <button id="edit-modal-close" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+            </div>
+            <div class="p-6">
+                <form id="edit-district-form">
+                    <!-- Edit form fields will be populated here -->
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = (typeof window !== 'undefined' && window.location && window.location.origin)
+            ? `${window.location.origin}/api`
+            : 'http://localhost:800/api';
+        let districtsData = [];
+
+        // Initialize admin panel
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDistricts();
+            loadStats();
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            // Add district form
+            document.getElementById('add-district-form').addEventListener('submit', handleAddDistrict);
+            
+            // Refresh button
+            document.getElementById('refresh-data').addEventListener('click', function() {
+                loadDistricts();
+                loadStats();
+            });
+
+            // Modal close
+            document.getElementById('edit-modal-close').addEventListener('click', closeEditModal);
+        }
+
+        async function loadDistricts() {
+            const loading = document.getElementById('loading');
+            try {
+                loading.classList.remove('hidden');
+                
+                const response = await fetch(`${API_BASE_URL}/districts`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    districtsData = result.data;
+                    renderDistrictsTable();
+                } else {
+                    throw new Error(result.message);
+                }
+            } catch (error) {
+                console.error('Error loading districts:', error);
+                alert('Veriler yüklenirken hata oluştu: ' + error.message);
+            } finally {
+                loading.classList.add('hidden');
+            }
+        }
+
+        async function loadStats() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/stats`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    const stats = result.data;
+                    document.getElementById('stats-won').textContent = stats.won;
+                    document.getElementById('stats-negotiating').textContent = stats.negotiating;
+                    document.getElementById('stats-upcoming').textContent = stats.upcoming;
+                    document.getElementById('stats-lost').textContent = stats.lost;
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        function renderDistrictsTable() {
+            const tbody = document.getElementById('districts-table');
+            tbody.innerHTML = '';
+
+            districtsData.forEach(district => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="px-4 py-4">
+                        <div class="font-medium">${district.details.province}</div>
+                        <div class="text-sm text-gray-600">${district.details.district}</div>
+                        <div class="text-xs text-gray-500">ID: ${district.districtId}</div>
+                    </td>
+                    <td class="px-4 py-4">
+                        <span class="status-badge status-${district.status}">${getStatusText(district.status)}</span>
+                    </td>
+                    <td class="px-4 py-4">
+                        <div class="text-sm">${district.details.cabin_count_full || 0}/${district.details.cabin_count_total}</div>
+                        <div class="text-xs text-gray-600">${district.details.tender_duration}</div>
+                    </td>
+                    <td class="px-4 py-4">
+                        <div class="text-sm font-medium">${district.details.rental_fee}</div>
+                    </td>
+                    <td class="px-4 py-4">
+                        <div class="space-x-2">
+                            <button onclick="editDistrict('${district.districtId}')" class="text-blue-600 hover:text-blue-800 text-sm">✏️ Düzenle</button>
+                            <button onclick="deleteDistrict('${district.districtId}')" class="text-red-600 hover:text-red-800 text-sm">🗑️ Sil</button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        async function handleAddDistrict(e) {
+            e.preventDefault();
+            const loading = document.getElementById('loading');
+            
+            try {
+                loading.classList.remove('hidden');
+                
+                const formData = new FormData(e.target);
+                const districtData = {
+                    districtId: formData.get('districtId'),
+                    status: formData.get('status'),
+                    details: {
+                        province: formData.get('province'),
+                        district: formData.get('district'),
+                        tender_duration: formData.get('tender_duration'),
+                        cabin_count_total: parseInt(formData.get('cabin_count_total')),
+                        cabin_count_full: parseInt(formData.get('cabin_count_full') || 0),
+                        rental_fee: formData.get('rental_fee'),
+                        meeting_notes: formData.get('meeting_notes'),
+                    }
+                };
+
+                // Add date fields based on status
+                const meetingDate = formData.get('meeting_date');
+                if (meetingDate) {
+                    if (districtData.status === 'upcoming') {
+                        districtData.details.foreseen_tender_date = meetingDate;
+                    } else {
+                        districtData.details.last_meeting_date = meetingDate;
+                    }
+                }
+
+                const response = await fetch(`${API_BASE_URL}/districts`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(districtData)
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('✅ Yeni ilçe verisi başarıyla eklendi!');
+                    e.target.reset();
+                    loadDistricts();
+                    loadStats();
+                } else {
+                    throw new Error(result.message);
+                }
+            } catch (error) {
+                console.error('Error adding district:', error);
+                alert('❌ Veri eklenirken hata oluştu: ' + error.message);
+            } finally {
+                loading.classList.add('hidden');
+            }
+        }
+
+        async function deleteDistrict(districtId) {
+            if (!confirm('Bu ilçe verisini silmek istediğinizden emin misiniz?')) {
+                return;
+            }
+
+            const loading = document.getElementById('loading');
+            try {
+                loading.classList.remove('hidden');
+                
+                const response = await fetch(`${API_BASE_URL}/districts/${districtId}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('✅ İlçe verisi başarıyla silindi!');
+                    loadDistricts();
+                    loadStats();
+                } else {
+                    throw new Error(result.message);
+                }
+            } catch (error) {
+                console.error('Error deleting district:', error);
+                alert('❌ Veri silinirken hata oluştu: ' + error.message);
+            } finally {
+                loading.classList.add('hidden');
+            }
+        }
+
+        function editDistrict(districtId) {
+            const district = districtsData.find(d => d.districtId === districtId);
+            if (!district) return;
+
+            // Populate edit modal and show
+            // Implementation for edit functionality can be added here
+            alert('Düzenleme özelliği geliştirme aşamasında...');
+        }
+
+        function closeEditModal() {
+            document.getElementById('edit-modal').classList.add('hidden');
+        }
+
+        function getStatusText(status) {
+            const statusTexts = {
+                won: 'Alınan',
+                negotiating: 'Görüşmesi Devam Eden',
+                upcoming: 'İhaleye Çıkacak',
+                lost: 'Olumsuz'
+            };
+            return statusTexts[status] || status;
+        }
+    </script>
+</body>
+</html>

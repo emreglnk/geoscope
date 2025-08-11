@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoScope Demo - İhale Durumu Haritası</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .district-path {
+            cursor: pointer;
+            transition: all 0.3s ease;
+            stroke: #374151;
+            stroke-width: 1;
+        }
+        
+        .district-path:hover {
+            stroke: #000;
+            stroke-width: 3;
+            filter: brightness(1.1);
+        }
+        
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 1000;
+            max-width: 200px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-6">
+        <!-- Header -->
+        <header class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">GeoScope Demo</h1>
+            <p class="text-gray-600">Türkiye İlçe Bazlı İhale Durumu Haritası</p>
+            <p class="text-sm text-blue-600 mt-2">Demo: Tüm özellikler çalışıyor - Simplified SVG</p>
+        </header>
+
+        <!-- Filter Buttons -->
+        <div class="flex flex-wrap justify-center gap-3 mb-6">
+            <button id="filter-all" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors ring-2 ring-blue-300">
+                Tümünü Göster
+            </button>
+            <button id="filter-won" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                Sadece Alınanlar
+            </button>
+            <button id="filter-negotiating" class="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors">
+                Görüşmesi Devam Edenler
+            </button>
+            <button id="filter-upcoming" class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors">
+                İhaleye Çıkacaklar
+            </button>
+            <button id="filter-lost" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+                Olumsuzlar
+            </button>
+        </div>
+
+        <!-- Legend -->
+        <div class="flex flex-wrap justify-center gap-4 mb-6">
+            <div class="flex items-center">
+                <div class="w-4 h-4 bg-green-500 rounded mr-2"></div>
+                <span class="text-sm text-gray-700">Alınan</span>
+            </div>
+            <div class="flex items-center">
+                <div class="w-4 h-4 bg-yellow-400 rounded mr-2"></div>
+                <span class="text-sm text-gray-700">Görüşmesi Devam Eden</span>
+            </div>
+            <div class="flex items-center">
+                <div class="w-4 h-4 bg-orange-400 rounded mr-2"></div>
+                <span class="text-sm text-gray-700">İhaleye Çıkacak</span>
+            </div>
+            <div class="flex items-center">
+                <div class="w-4 h-4 bg-red-500 rounded mr-2"></div>
+                <span class="text-sm text-gray-700">Olumsuz</span>
+            </div>
+        </div>
+
+        <!-- Map Container -->
+        <div class="bg-white rounded-lg shadow-lg p-4">
+            <div id="map-container" class="w-full flex justify-center">
+                <!-- Simplified Turkey Map for Demo -->
+                <svg width="600" height="400" viewBox="0 0 600 400" class="border rounded">
+                    <!-- Istanbul Region -->
+                    <rect data-ilce-id="1971" data-il="İstanbul" data-ilce="Kadıköy" x="50" y="100" width="80" height="60" class="district-path" fill="#10b981"></rect>
+                    <text x="90" y="135" text-anchor="middle" class="text-xs font-medium pointer-events-none">Kadıköy</text>
+                    
+                    <rect data-ilce-id="1972" data-il="İstanbul" data-ilce="Üsküdar" x="140" y="100" width="80" height="60" class="district-path" fill="#fbbf24"></rect>
+                    <text x="180" y="135" text-anchor="middle" class="text-xs font-medium pointer-events-none">Üsküdar</text>
+                    
+                    <rect data-ilce-id="1973" data-il="İstanbul" data-ilce="Beşiktaş" x="50" y="170" width="80" height="60" class="district-path" fill="#fb923c"></rect>
+                    <text x="90" y="205" text-anchor="middle" class="text-xs font-medium pointer-events-none">Beşiktaş</text>
+                    
+                    <rect data-ilce-id="1974" data-il="İstanbul" data-ilce="Şişli" x="140" y="170" width="80" height="60" class="district-path" fill="#ef4444"></rect>
+                    <text x="180" y="205" text-anchor="middle" class="text-xs font-medium pointer-events-none">Şişli</text>
+                    
+                    <!-- Ankara Region -->
+                    <rect data-ilce-id="798" data-il="Ankara" data-ilce="Çankaya" x="250" y="150" width="80" height="60" class="district-path" fill="#10b981"></rect>
+                    <text x="290" y="185" text-anchor="middle" class="text-xs font-medium pointer-events-none">Çankaya</text>
+                    
+                    <rect data-ilce-id="799" data-il="Ankara" data-ilce="Keçiören" x="340" y="150" width="80" height="60" class="district-path" fill="#fbbf24"></rect>
+                    <text x="380" y="185" text-anchor="middle" class="text-xs font-medium pointer-events-none">Keçiören</text>
+                    
+                    <rect data-ilce-id="800" data-il="Ankara" data-ilce="Mamak" x="250" y="220" width="80" height="60" class="district-path" fill="#fb923c"></rect>
+                    <text x="290" y="255" text-anchor="middle" class="text-xs font-medium pointer-events-none">Mamak</text>
+                    
+                    <rect data-ilce-id="801" data-il="Ankara" data-ilce="Yenimahalle" x="340" y="220" width="80" height="60" class="district-path" fill="#ef4444"></rect>
+                    <text x="380" y="255" text-anchor="middle" class="text-xs font-medium pointer-events-none">Yenimahalle</text>
+                    
+                    <!-- İzmir Region -->
+                    <rect data-ilce-id="1158" data-il="İzmir" data-ilce="Konak" x="450" y="200" width="80" height="60" class="district-path" fill="#10b981"></rect>
+                    <text x="490" y="235" text-anchor="middle" class="text-xs font-medium pointer-events-none">Konak</text>
+                    
+                    <rect data-ilce-id="1159" data-il="İzmir" data-ilce="Bornova" x="450" y="270" width="80" height="60" class="district-path" fill="#fbbf24"></rect>
+                    <text x="490" y="305" text-anchor="middle" class="text-xs font-medium pointer-events-none">Bornova</text>
+                    
+                    <!-- Labels for regions -->
+                    <text x="115" y="80" text-anchor="middle" class="text-lg font-bold fill-gray-700">İSTANBUL</text>
+                    <text x="315" y="130" text-anchor="middle" class="text-lg font-bold fill-gray-700">ANKARA</text>
+                    <text x="515" y="180" text-anchor="middle" class="text-lg font-bold fill-gray-700">İZMİR</text>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div id="modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
+            <div class="flex justify-between items-center p-6 border-b border-gray-200">
+                <h2 id="modal-title" class="text-xl font-bold text-gray-800"></h2>
+                <button id="modal-close" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+            </div>
+            <div id="modal-content" class="p-6">
+                <!-- Content will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Tooltip -->
+    <div id="tooltip" class="tooltip hidden"></div>
+
+    <script src="script.js"></script>
+</body>
+</html>

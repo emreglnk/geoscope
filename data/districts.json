@@ -1,0 +1,114 @@
+[
+  {
+    "districtId": "1971",
+    "status": "won",
+    "details": {
+      "province": "İstanbul",
+      "district": "Kadıköy",
+      "tender_duration": "36 ay",
+      "cabin_count_total": 25,
+      "cabin_count_full": 18,
+      "rental_fee": "₺15,000/ay",
+      "last_meeting_date": "2024-07-15",
+      "meeting_notes": "Sözleşme imzalandı, kurulum başlatıldı."
+    }
+  },
+  {
+    "districtId": "1972",
+    "status": "negotiating",
+    "details": {
+      "province": "İstanbul",
+      "district": "Üsküdar",
+      "tender_duration": "24 ay",
+      "cabin_count_total": 20,
+      "cabin_count_full": 0,
+      "rental_fee": "₺12,000/ay",
+      "last_meeting_date": "2024-07-25",
+      "meeting_notes": "Fiyat görüşmeleri devam ediyor. Rakip firma teklifleri değerlendiriliyor."
+    }
+  },
+  {
+    "districtId": "1973",
+    "status": "upcoming",
+    "details": {
+      "province": "İstanbul",
+      "district": "Beşiktaş",
+      "tender_duration": "30 ay",
+      "cabin_count_total": 15,
+      "cabin_count_full": 0,
+      "rental_fee": "₺18,000/ay",
+      "foreseen_tender_date": "2024-09-15",
+      "meeting_notes": "İhale dosyaları hazırlanıyor."
+    }
+  },
+  {
+    "districtId": "1974",
+    "status": "lost",
+    "details": {
+      "province": "İstanbul",
+      "district": "Şişli",
+      "tender_duration": "24 ay",
+      "cabin_count_total": 30,
+      "cabin_count_full": 0,
+      "rental_fee": "₺20,000/ay",
+      "reason_for_loss": "Fiyat rekabeti nedeniyle kaybedildi",
+      "meeting_notes": "Rakip firma %15 daha düşük teklif verdi."
+    }
+  },
+  {
+    "districtId": "798",
+    "status": "won",
+    "details": {
+      "province": "Ankara",
+      "district": "Çankaya",
+      "tender_duration": "48 ay",
+      "cabin_count_total": 40,
+      "cabin_count_full": 35,
+      "rental_fee": "₺22,000/ay",
+      "last_meeting_date": "2024-06-10",
+      "meeting_notes": "Başarılı proje, ek lokasyonlar için görüşme planlanıyor."
+    }
+  },
+  {
+    "districtId": "799",
+    "status": "negotiating",
+    "details": {
+      "province": "Ankara",
+      "district": "Keçiören",
+      "tender_duration": "36 ay",
+      "cabin_count_total": 22,
+      "cabin_count_full": 0,
+      "rental_fee": "₺14,000/ay",
+      "last_meeting_date": "2024-07-30",
+      "meeting_notes": "Teknik şartname değişiklikleri görüşülüyor."
+    }
+  },
+  {
+    "districtId": "1158",
+    "status": "won",
+    "details": {
+      "province": "İzmir",
+      "district": "Konak",
+      "tender_duration": "42 ay",
+      "cabin_count_total": 32,
+      "cabin_count_full": 28,
+      "rental_fee": "₺19,000/ay",
+      "last_meeting_date": "2024-05-20",
+      "meeting_notes": "Mükemmel performans, yenileme sözleşmesi görüşülüyor."
+    }
+  },
+  {
+    "districtId": "1159",
+    "status": "negotiating",
+    "details": {
+      "province": "İzmir",
+      "district": "Bornova",
+      "tender_duration": "30 ay",
+      "cabin_count_total": 26,
+      "cabin_count_full": 0,
+      "rental_fee": "₺17,000/ay",
+      "last_meeting_date": "2024-07-28",
+      "meeting_notes": "Ödeme şartları ve garanti koşulları müzakere ediliyor."
+    }
+  }
+]

@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoScope - İhale Durumu Haritası</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .district-label-html {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    transition: none !important;
+    width: auto;
+    text-transform: capitalize;
+    border: none !important;
+    background-color: transparent !important;
+    text-shadow: none !important;
+}
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 1000;
+            max-width: 200px;
+        }
+        
+        .district-path {
+            cursor: pointer;
+            transition: opacity 0.3s ease;
+        }
+        
+        .district-path:hover {
+            stroke: #000;
+            stroke-width: 2;
+        }
+        
+        .district-label {
+            font-size: 8px;
+            fill: #333;
+            text-anchor: middle;
+            pointer-events: none;
+            font-weight: 500;
+        }
+        
+        /* Consistent border styling for all districts */
+        svg path[data-district-group-id] {
+            stroke: #374151 !important; /* Consistent gray border */
+            stroke-width: 0.5 !important;
+            stroke-opacity: 0.8 !important;
+        }
+        
+        svg path[data-district-group-id]:hover {
+            stroke: #1f2937 !important; /* Darker on hover */
+            stroke-width: 1.5 !important;
+            stroke-opacity: 1 !important;
+        }
+        
+        /* HTML labels styling */
+        .district-label-html {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            transition: all 0.2s ease;
+        }
+        
+        .district-label-html:hover {
+            transform: scale(1.05);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 overflow-hidden">
+    <!-- Compact Control Bar -->
+    <div class="fixed top-0 left-0 right-0 z-50 bg-white shadow-md border-b">
+        <div class="flex items-center justify-between px-4 py-2">
+            <!-- Logo and Title -->
+            <div class="flex items-center space-x-4">
+                <h1 class="text-xl font-bold text-gray-800">GeoScope</h1>
+                <span class="text-sm text-gray-600">Türkiye İhale Durumu Haritası</span>
+            </div>
+            
+            <!-- Filter Buttons -->
+            <div class="flex items-center space-x-2">
+                <button id="filter-all" class="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors">
+                    Tümü
+                </button>
+                <button id="filter-won" class="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700 transition-colors">
+                    Alınan
+                </button>
+                <button id="filter-negotiating" class="px-3 py-1 bg-yellow-600 text-white rounded text-sm hover:bg-yellow-700 transition-colors">
+                    Görüşme
+                </button>
+                <button id="filter-upcoming" class="px-3 py-1 bg-orange-600 text-white rounded text-sm hover:bg-orange-700 transition-colors">
+                    İhale
+                </button>
+                <button id="filter-lost" class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700 transition-colors">
+                    Olumsuz
+                </button>
+            </div>
+            
+            <!-- Legend -->
+            <div class="flex items-center space-x-3">
+                <div class="flex items-center">
+                    <div class="w-3 h-3 bg-green-500 rounded mr-1"></div>
+                    <span class="text-xs text-gray-700">Alınan</span>
+                </div>
+                <div class="flex items-center">
+                    <div class="w-3 h-3 bg-yellow-400 rounded mr-1"></div>
+                    <span class="text-xs text-gray-700">Görüşme</span>
+                </div>
+                <div class="flex items-center">
+                    <div class="w-3 h-3 bg-orange-400 rounded mr-1"></div>
+                    <span class="text-xs text-gray-700">İhale</span>
+                </div>
+                <div class="flex items-center">
+                    <div class="w-3 h-3 bg-red-500 rounded mr-1"></div>
+                    <span class="text-xs text-gray-700">Olumsuz</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fullscreen Map Container -->
+    <div id="map-container" class="fixed inset-0 pt-16 bg-gray-100">
+        <div class="flex justify-center items-center h-full">
+            <div class="text-gray-500">Harita yükleniyor...</div>
+        </div>
+    </div>
+
+        <!-- Loading Indicator -->
+        <div id="loading" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+            <div class="bg-white p-6 rounded-lg">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                <p class="mt-2 text-gray-600">Yükleniyor...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div id="modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white p-6 rounded-lg shadow-lg max-w-lg w-full mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h2 id="modal-title" class="text-xl font-bold text-gray-900">İlçe Detayları</h2>
+                <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div id="modal-content" class="text-gray-700">
+                <!-- Content will be dynamically populated -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Add New Tender Modal -->
+    <div id="add-tender-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-gray-900">🎯 Yeni İhale Ekle</h2>
+                <button onclick="closeAddTenderModal()" class="text-gray-500 hover:text-gray-700">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <form id="add-tender-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">İl</label>
+                    <input type="text" id="tender-province" required 
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="Örn: İstanbul">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">İlçe</label>
+                    <input type="text" id="tender-district" required 
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="Örn: Maltepe">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">İhale Durumu</label>
+                    <select id="tender-status" required 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Durum Seçiniz</option>
+                        <option value="won">Alınan</option>
+                        <option value="negotiating">Görüşmesi Devam Eden</option>
+                        <option value="upcoming">İhaleye Çıkacak</option>
+                        <option value="lost">Olumsuz</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">İhale Tutarı (₺)</label>
+                    <input type="number" id="tender-value" required 
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="Örn: 850000">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Son Güncelleme</label>
+                    <input type="date" id="tender-date" required 
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Açıklama</label>
+                    <textarea id="tender-description" rows="3" 
+                              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="İhale hakkında ek bilgiler..."></textarea>
+                </div>
+                
+                <div class="flex space-x-3 pt-4">
+                    <button type="submit" 
+                            class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 font-medium">
+                        💾 İhale Ekle
+                    </button>
+                    <button type="button" onclick="closeAddTenderModal()" 
+                            class="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 font-medium">
+                        ❌ İptal
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tooltip -->
+    <div id="tooltip" class="tooltip hidden"></div>
+
+    <script src="script.js"></script>
+</body>
+</html>

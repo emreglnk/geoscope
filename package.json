@@ -1,0 +1,27 @@
+{
+  "name": "geoscope-backend",
+  "version": "1.0.0",
+  "description": "GeoScope Interactive Tender Map Backend API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "install-deps": "npm install express cors fs-extra nodemon --save"
+  },
+  "keywords": [
+    "geoscope",
+    "tender",
+    "map",
+    "api"
+  ],
+  "author": "GeoScope Team",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "fs-extra": "^11.3.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
