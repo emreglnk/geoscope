@@ -7,6 +7,9 @@ const API_BASE_URL = (typeof window !== 'undefined' && window.location && window
 let districtData = []; // District summaries for map coloring
 let tendersData = []; // All tenders data
 
+// Map state
+let currentMapLevel = 'district'; // 'district' | 'province'
+
 /**
  * Fetch tenders data from backend API
  */
@@ -144,7 +147,9 @@ const statusColors = {
     won: '#10b981',      // green-500
     negotiating: '#fbbf24', // yellow-400
     upcoming: '#fb923c',    // orange-400
-    lost: '#ef4444'         // red-500
+    lost: '#ef4444',        // red-500
+    competitor: '#8b5cf6',  // violet-500
+    terminated: '#111827'   // gray-900 (blackish)
 };
 
 // Normalize Turkish strings for robust matching (province/district names)
@@ -208,7 +213,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 });
 
 /**
- * Load the real map.svg file with Turkish district boundaries
+ * Load SVG map for current level
  */
 async function loadSVGMap() {
     const loading = document.getElementById('loading');
@@ -217,23 +222,24 @@ async function loadSVGMap() {
     try {
         loading.classList.remove('hidden');
         
-        console.log('Loading real map.svg file...');
+        console.log(`Loading SVG for level: ${currentMapLevel}`);
         
-        // Fetch the real map.svg file
-        const response = await fetch('./map.svg');
+        // Fetch proper SVG file
+        const svgPath = currentMapLevel === 'province' ? './map-il.svg' : './map.svg';
+        const response = await fetch(svgPath);
         
         if (!response.ok) {
-            throw new Error(`Failed to fetch map.svg: ${response.status}`);
+            throw new Error(`Failed to fetch ${svgPath}: ${response.status}`);
         }
         
         const svgText = await response.text();
         
-        // Insert the real SVG map into the container
+        // Insert SVG into the container
         mapContainer.innerHTML = svgText;
         svgElement = mapContainer.querySelector('svg');
         
         if (!svgElement) {
-            throw new Error('SVG element not found in map.svg');
+            throw new Error('SVG element not found in loaded SVG');
         }
         
         // Ensure the SVG is responsive and properly sized
@@ -241,56 +247,53 @@ async function loadSVGMap() {
         svgElement.setAttribute('height', '100%');
         svgElement.setAttribute('class', 'border rounded max-h-screen');
         
-        // Add district-path class to all district group elements for styling
-        // Real SVG has districts as <g> elements with id attributes like "01-karaisalı"
-        const districtGroups = svgElement.querySelectorAll('g[id]');
-        const districtPaths = [];
-        
-        districtGroups.forEach(group => {
-            const groupId = group.getAttribute('id');
-            // Check if this looks like a district ID (has dash and potential district name)
-            if (groupId && groupId.includes('-')) {
-                const pathElement = group.querySelector('path');
-                if (pathElement) {
-                    pathElement.classList.add('district-path');
-                    // Store the district ID from the group on the path for compatibility
-                    pathElement.setAttribute('data-district-group-id', groupId);
-                    districtPaths.push(pathElement);
-                }
-            }
-        });
-        
-        console.log(`✅ Real map.svg loaded successfully with ${districtPaths.length} district paths from ${districtGroups.length} groups`);
-        
         // Setup zoom and pan functionality
         setupZoomAndPan();
-        
-        // Add "Add New Tender" button to the map
-        const addButton = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-        addButton.setAttribute('id', 'add-district-btn');
-        addButton.setAttribute('class', 'cursor-pointer');
-        addButton.setAttribute('onclick', 'showAddDistrictModal()');
-  
-        
-        // Insert the real SVG map into container
-        svgElement = mapContainer.querySelector('svg');
-        
-        if (!svgElement) {
-            throw new Error('SVG element not found after loading');
+
+        if (currentMapLevel === 'district') {
+            // Prepare district paths
+            const districtGroups = svgElement.querySelectorAll('g[id]');
+            const districtPaths = [];
+            districtGroups.forEach(group => {
+                const groupId = group.getAttribute('id');
+                if (groupId && groupId.includes('-')) {
+                    const pathElement = group.querySelector('path');
+                    if (pathElement) {
+                        pathElement.classList.add('district-path');
+                        pathElement.setAttribute('data-district-group-id', groupId);
+                        districtPaths.push(pathElement);
+                    }
+                }
+            });
+            console.log(`✅ District map loaded with ${districtPaths.length} paths`);
+            
+            // Add province border overlay
+            await addProvinceBordersOverlay();
+
+            // Initialize map after a short delay
+            setTimeout(() => {
+                try {
+                    initializeMap();
+                    setupMapInteractions();
+                    console.log('District map initialization completed');
+                } catch (error) {
+                    console.error('Error during district map initialization:', error);
+                }
+            }, 200);
+        } else {
+            // Province map
+            prepareProvinceGroups();
+            setTimeout(() => {
+                try {
+                    initializeProvinceMap();
+                    addProvinceOutlineTopLayer();
+                    setupProvinceInteractions();
+                    console.log('Province map initialization completed');
+                } catch (error) {
+                    console.error('Error during province map initialization:', error);
+                }
+            }, 200);
         }
-        
-        console.log('Simplified SVG map created successfully');
-        
-        // Initialize map after a short delay
-        setTimeout(() => {
-            try {
-                initializeMap();
-                setupMapInteractions();
-                console.log('Map initialization completed');
-            } catch (error) {
-                console.error('Error during map initialization:', error);
-            }
-        }, 200);
         
     } catch (error) {
         console.error('Error loading SVG map:', error);
@@ -306,6 +309,266 @@ async function loadSVGMap() {
     } finally {
         loading.classList.add('hidden');
     }
+}
+
+/**
+ * Overlay province borders on top of district map
+ */
+async function addProvinceBordersOverlay() {
+    try {
+        const response = await fetch('./map-il.svg');
+        if (!response.ok) return;
+        const svgText = await response.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svgText, 'image/svg+xml');
+
+        // Create overlay group
+        const existing = svgElement.querySelector('#province-borders-overlay');
+        if (existing) existing.remove();
+        const overlayGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        overlayGroup.setAttribute('id', 'province-borders-overlay');
+        overlayGroup.setAttribute('pointer-events', 'none');
+        overlayGroup.setAttribute('opacity', '1');
+
+        // Append to zoom-group if exists, otherwise to root svg
+        const zoomGroup = svgElement.querySelector('#zoom-group') || svgElement;
+
+        // Clone each province path into overlay
+        const provinceGroups = doc.querySelectorAll('g[title]');
+        provinceGroups.forEach(g => {
+            const provinceName = g.getAttribute('title') || g.getAttribute('id') || '';
+            const status = getProvinceAggregatedStatus(provinceName);
+            const color = status ? statusColors[status] : '#6b7280';
+
+        // 1) Outer "eraser" stroke to create inset look (fully transparent fill)
+            const eraser = g.cloneNode(true);
+            eraser.querySelectorAll('path').forEach(p => {
+                p.setAttribute('fill', 'none');
+                p.setAttribute('stroke', '#e5e7eb'); // page bg-ish (gray-200)
+            p.setAttribute('stroke-width', '3');
+                p.setAttribute('stroke-linejoin', 'round');
+                p.setAttribute('stroke-linecap', 'round');
+                p.setAttribute('vector-effect', 'non-scaling-stroke');
+            });
+            overlayGroup.appendChild(eraser);
+
+            // 2) Inner colored stroke (actual border)
+            const inner = g.cloneNode(true);
+            inner.querySelectorAll('path').forEach(p => {
+                p.setAttribute('fill', 'none');
+                p.setAttribute('stroke', color);
+                p.setAttribute('stroke-width', '1.6');
+                p.setAttribute('stroke-linejoin', 'round');
+                p.setAttribute('stroke-linecap', 'round');
+                p.setAttribute('vector-effect', 'non-scaling-stroke');
+                p.setAttribute('stroke-opacity', status ? '0.95' : '0.7');
+            });
+            overlayGroup.appendChild(inner);
+        });
+
+        zoomGroup.appendChild(overlayGroup);
+        console.log('🧭 Province borders overlay added');
+    } catch (e) {
+        console.warn('Could not add province borders overlay:', e);
+    }
+}
+
+/**
+ * Prepare province groups with helper attributes
+ */
+function prepareProvinceGroups() {
+    if (!svgElement) return;
+    const provinceGroups = svgElement.querySelectorAll('g[title], g[iso2], g[id]');
+    provinceGroups.forEach(group => {
+        const title = group.getAttribute('title');
+        const idName = group.getAttribute('id');
+        const name = (title && title.trim()) ? title : (idName || '').trim();
+        group.setAttribute('data-province-name', name);
+        group.classList.add('province-group');
+        // Cursor and base styles
+        group.style.cursor = 'pointer';
+        group.querySelectorAll('path').forEach(p => {
+            p.style.stroke = '#9ca3af';
+            p.style.strokeWidth = '1.2';
+            p.style.vectorEffect = 'non-scaling-stroke';
+            p.style.strokeLinejoin = 'round';
+            p.style.strokeLinecap = 'round';
+        });
+    });
+}
+
+/**
+ * Determine aggregated province status from district data
+ */
+function getProvinceAggregatedStatus(provinceName) {
+    const items = districtData.filter(d => normalizeName(d.details?.province) === normalizeName(provinceName));
+    if (items.length === 0) return undefined;
+    // Priority: won > negotiating > upcoming > competitor > lost > terminated
+    if (items.some(i => i.status === 'won')) return 'won';
+    if (items.some(i => i.status === 'negotiating')) return 'negotiating';
+    if (items.some(i => i.status === 'upcoming')) return 'upcoming';
+    if (items.some(i => i.status === 'competitor')) return 'competitor';
+    if (items.some(i => i.status === 'lost')) return 'lost';
+    if (items.some(i => i.status === 'terminated')) return 'terminated';
+    return undefined;
+}
+
+/**
+ * Get counts per status for a province
+ */
+function getProvinceStatusCounts(provinceName) {
+    const items = districtData.filter(d => normalizeName(d.details?.province) === normalizeName(provinceName));
+    const counts = { won: 0, negotiating: 0, upcoming: 0, lost: 0 };
+    items.forEach(i => { counts[i.status] = (counts[i.status] || 0) + 1; });
+    return { counts, total: items.length };
+}
+
+/**
+ * Color provinces based on aggregated status
+ */
+function initializeProvinceMap() {
+    if (!svgElement) return;
+    const groups = svgElement.querySelectorAll('g.province-group');
+    let colored = 0;
+    groups.forEach(group => {
+        const provinceName = group.getAttribute('data-province-name') || group.getAttribute('title') || group.getAttribute('id');
+        const status = getProvinceAggregatedStatus(provinceName);
+        const color = status ? statusColors[status] : '#e5e7eb';
+        group.querySelectorAll('path').forEach(p => {
+            p.style.fill = color;
+            // Hide per-province stroke; we'll draw a separate top outline layer for full borders
+            p.style.stroke = 'none';
+            p.style.strokeWidth = '0';
+        });
+        if (status) colored++;
+        // Hover effects
+        group.addEventListener('mouseenter', function() {
+            group.querySelectorAll('path').forEach(p => {
+                p.style.stroke = '#000';
+                p.style.strokeWidth = '1.2';
+                p.style.filter = 'brightness(1.05)';
+            });
+        });
+        group.addEventListener('mouseleave', function() {
+            group.querySelectorAll('path').forEach(p => {
+                p.style.stroke = 'none';
+                p.style.strokeWidth = '0';
+                p.style.filter = 'none';
+            });
+        });
+    });
+    console.log(`🗺️ Provinces colored: ${colored}/${groups.length}`);
+}
+
+/**
+ * Add a top outline for all provinces so borders are fully visible regardless of fill
+ */
+function addProvinceOutlineTopLayer() {
+    if (!svgElement) return;
+    const existing = svgElement.querySelector('#province-outline-top');
+    if (existing) existing.remove();
+    const outline = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    outline.setAttribute('id', 'province-outline-top');
+    outline.setAttribute('pointer-events', 'none');
+    const groups = svgElement.querySelectorAll('g[title]');
+    groups.forEach(g => {
+        const clone = g.cloneNode(true);
+        clone.querySelectorAll('path').forEach(p => {
+            p.setAttribute('fill', 'none');
+            p.setAttribute('stroke', '#4b5563'); // gray-600
+            p.setAttribute('stroke-width', '1.4');
+            p.setAttribute('vector-effect', 'non-scaling-stroke');
+            p.setAttribute('stroke-linejoin', 'round');
+            p.setAttribute('stroke-linecap', 'round');
+        });
+        outline.appendChild(clone);
+    });
+    const zoomGroup = svgElement.querySelector('#zoom-group') || svgElement;
+    zoomGroup.appendChild(outline);
+}
+
+/**
+ * Province interactions: tooltip and click menu
+ */
+function setupProvinceInteractions() {
+    if (!svgElement) return;
+    const tooltip = document.getElementById('tooltip');
+    const groups = svgElement.querySelectorAll('g.province-group');
+    groups.forEach(group => {
+        const provinceName = group.getAttribute('data-province-name') || group.getAttribute('title') || group.getAttribute('id');
+        group.addEventListener('mouseenter', function(e) {
+            showProvinceTooltip(e, provinceName);
+        });
+        group.addEventListener('mousemove', function(e) {
+            updateTooltipPosition(e);
+        });
+        group.addEventListener('mouseleave', function() {
+            tooltip.classList.add('hidden');
+        });
+        group.addEventListener('click', function(e) {
+            e.stopPropagation();
+            showProvinceClickMenu(e, provinceName);
+        });
+    });
+}
+
+function showProvinceTooltip(event, provinceName) {
+    const tooltip = document.getElementById('tooltip');
+    const { counts, total } = getProvinceStatusCounts(provinceName);
+    const status = getProvinceAggregatedStatus(provinceName);
+    const content = `
+        <strong>${provinceName}</strong><br>
+        <span class="inline-block px-2 py-0.5 rounded text-white text-xs" style="background-color: ${status ? statusColors[status] : '#9ca3af'}">${status ? getStatusText(status) : 'Veri yok'}</span><br>
+        Alınan: ${counts.won} • Görüşme: ${counts.negotiating} • İhale: ${counts.upcoming} • Olumsuz: ${counts.lost}
+    `;
+    tooltip.innerHTML = content;
+    tooltip.classList.remove('hidden');
+    updateTooltipPosition(event);
+}
+
+function showProvinceClickMenu(event, provinceName) {
+    const existingMenu = document.getElementById('district-click-menu');
+    if (existingMenu) existingMenu.remove();
+    const menu = document.createElement('div');
+    menu.id = 'district-click-menu';
+    menu.className = 'fixed z-50 bg-white rounded-lg shadow-lg border border-gray-200 min-w-48';
+    menu.style.left = (event.pageX + 10) + 'px';
+    menu.style.top = (event.pageY + 10) + 'px';
+    const { counts, total } = getProvinceStatusCounts(provinceName);
+    const status = getProvinceAggregatedStatus(provinceName);
+    menu.innerHTML = `
+        <div class="p-3 border-b border-gray-100">
+            <h3 class="font-semibold text-gray-900">${provinceName}</h3>
+            <p class="text-sm text-gray-600">${total} ilçe kaydı</p>
+        </div>
+        <div class="py-2">
+            <div class="px-4 py-2 text-sm text-gray-700 flex items-center">
+                <span class="inline-block w-3 h-3 rounded mr-2" style="background:${status ? statusColors[status] : '#9ca3af'}"></span>
+                ${status ? getStatusText(status) : 'Veri yok'}
+            </div>
+            <button onclick="openEditTenderForProvince('${provinceName}')" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4h2m-1 1v14m7-7H5"></path>
+                </svg>
+                İl Düzeyinde Düzenle
+            </button>
+            <button onclick="addTenderForDistrict('${provinceName}', '')" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                </svg>
+                Yeni İhale Ekle (İl)
+            </button>
+        </div>
+    `;
+    document.body.appendChild(menu);
+    setTimeout(() => {
+        document.addEventListener('click', function closeMenu(e) {
+            if (!menu.contains(e.target)) {
+                menu.remove();
+                document.removeEventListener('click', closeMenu);
+            }
+        });
+    }, 100);
 }
 
 /**
@@ -353,21 +616,21 @@ function initializeMap() {
             console.log(`⚠️  No data found for district group: ${groupId}`);
         }
         
-        // Add nice styling
-        path.style.stroke = '#374151'; // gray-700
-        path.style.strokeWidth = '1';
+        // Softer borders
+        path.style.stroke = '#9ca3af'; // gray-400
+        path.style.strokeWidth = '0.8';
         path.style.cursor = 'pointer';
         
         // Add hover effects
         path.addEventListener('mouseenter', function() {
-            this.style.stroke = '#000';
-            this.style.strokeWidth = '2';
-            this.style.filter = 'brightness(1.1)';
+            this.style.stroke = '#6b7280'; // gray-500
+            this.style.strokeWidth = '1.2';
+            this.style.filter = 'brightness(1.04)';
         });
         
         path.addEventListener('mouseleave', function() {
-            this.style.stroke = '#374151';
-            this.style.strokeWidth = '1';
+            this.style.stroke = '#9ca3af';
+            this.style.strokeWidth = '0.5';
             this.style.filter = 'none';
         });
     });
@@ -804,6 +1067,7 @@ function showTooltip(event, district) {
     
     const provinceName = district.details.province;
     const districtName = district.details.district;
+    const competitorName = district.details.competitor_name;
     
     switch (district.status) {
         case 'won':
@@ -833,6 +1097,18 @@ function showTooltip(event, district) {
             content = `
                 <strong>${provinceName} - ${districtName}</strong><br>
                 <strong>Olumsuzluk Sebebi:</strong> ${district.details.reason_for_loss}
+            `;
+            break;
+        case 'competitor':
+            content = `
+                <strong>${provinceName} - ${districtName}</strong><br>
+                <strong>Rakip Firma:</strong> ${competitorName || 'Belirtilmedi'}
+            `;
+            break;
+        case 'terminated':
+            content = `
+                <strong>${provinceName} - ${districtName}</strong><br>
+                <strong>Durum:</strong> Feshedildi
             `;
             break;
     }
@@ -874,6 +1150,8 @@ function showDistrictClickMenu(event, district, groupId) {
     
     if (district) {
         // District has data - show view details and add new tender options
+        // If this district already has at least one tender, show Edit instead of Add
+        const hasTender = (district.details?.tender_count || 0) > 0;
         menuContent = `
             <div class="p-3 border-b border-gray-100">
                 <h3 class="font-semibold text-gray-900">${district.details.province} - ${district.details.district}</h3>
@@ -887,12 +1165,17 @@ function showDistrictClickMenu(event, district, groupId) {
                     </svg>
                     Detayları Görüntüle
                 </button>
-                <button onclick="addTenderForDistrict('${district.details.province}', '${district.details.district}')" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center">
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                    </svg>
+                ${hasTender ? `
+                <button onclick="openEditTenderForDistrict('${district.districtId}')" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center">
+                    <svg class=\"w-4 h-4 mr-2\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M11 4h2m-1 1v14m7-7H5\"></path></svg>
+                    İhaleyi Düzenle
+                </button>
+                ` : `
+                <button onclick=\"addTenderForDistrict('${district.details.province}', '${district.details.district}')\" class=\"w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center\">
+                    <svg class=\"w-4 h-4 mr-2\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M12 6v6m0 0v6m0-6h6m-6 0H6\"></path></svg>
                     Yeni İhale Ekle
                 </button>
+                `}
             </div>
         `;
     } else {
@@ -963,7 +1246,8 @@ function viewDistrictDetails(districtId) {
  * Add tender for specific district - pre-fill the form
  */
 function addTenderForDistrict(province, district) {
-    showAddTenderModal();
+    // If district is empty, open as province-scoped add
+    showAddTenderModal(district ? 'district' : 'province');
     
     // Pre-fill the form with district information
     setTimeout(() => {
@@ -1097,6 +1381,24 @@ function showModal(district) {
                             </div>
                         </div>`;
                 break;
+            case 'competitor':
+                content += `
+                        <div class="bg-purple-50 p-3 rounded">
+                            <div>
+                                <span class="font-medium text-gray-600">Rakip Firma:</span>
+                                <span class="ml-2">${tender.competitor_name || 'Belirtilmedi'}</span>
+                            </div>
+                        </div>`;
+                break;
+            case 'terminated':
+                content += `
+                        <div class="bg-gray-100 p-3 rounded">
+                            <div>
+                                <span class="font-medium text-gray-600">Durum:</span>
+                                <span class="ml-2">Feshedildi</span>
+                            </div>
+                        </div>`;
+                break;
         }
         
         content += `
@@ -1128,8 +1430,63 @@ function setupEventListeners() {
     document.getElementById('filter-upcoming').addEventListener('click', () => filterDistricts('upcoming'));
     document.getElementById('filter-lost').addEventListener('click', () => filterDistricts('lost'));
     
-    // Modal close
-    document.getElementById('modal-close').addEventListener('click', closeModal);
+    // Toggle buttons
+    const btnDistrict = document.getElementById('toggle-district');
+    const btnProvince = document.getElementById('toggle-province');
+    if (btnDistrict && btnProvince) {
+        const setActive = () => {
+            if (currentMapLevel === 'district') {
+                btnDistrict.classList.add('bg-gray-800','text-white');
+                btnDistrict.classList.remove('bg-white','text-gray-800');
+                btnProvince.classList.add('bg-white','text-gray-800');
+                btnProvince.classList.remove('bg-gray-800','text-white');
+            } else {
+                btnProvince.classList.add('bg-gray-800','text-white');
+                btnProvince.classList.remove('bg-white','text-gray-800');
+                btnDistrict.classList.add('bg-white','text-gray-800');
+                btnDistrict.classList.remove('bg-gray-800','text-white');
+            }
+        };
+        btnDistrict.addEventListener('click', async () => {
+            if (currentMapLevel !== 'district') {
+                currentMapLevel = 'district';
+                setActive();
+                await loadSVGMap();
+                // Re-apply current filter
+                filterDistricts(currentFilter);
+            }
+        });
+        btnProvince.addEventListener('click', async () => {
+            if (currentMapLevel !== 'province') {
+                currentMapLevel = 'province';
+                setActive();
+                await loadSVGMap();
+                filterDistricts(currentFilter);
+            }
+        });
+        setActive();
+    }
+    
+    // Show/hide competitor name input based on status
+    const statusSelect = document.getElementById('tender-status');
+    const competitorWrapper = document.getElementById('competitor-name-wrapper');
+    if (statusSelect && competitorWrapper) {
+        const refreshCompetitor = () => {
+            if (statusSelect.value === 'competitor') {
+                competitorWrapper.classList.remove('hidden');
+            } else {
+                competitorWrapper.classList.add('hidden');
+            }
+        };
+        statusSelect.addEventListener('change', refreshCompetitor);
+        refreshCompetitor();
+    }
+    
+    // Modal close (exists in demo.html). In index.html close button uses inline onclick.
+    const modalCloseBtn = document.getElementById('modal-close');
+    if (modalCloseBtn) {
+        modalCloseBtn.addEventListener('click', closeModal);
+    }
     document.getElementById('modal').addEventListener('click', function(e) {
         if (e.target === this) {
             closeModal();
@@ -1151,30 +1508,41 @@ function filterDistricts(status) {
     if (!svgElement) return;
     
     currentFilter = status;
-    const paths = svgElement.querySelectorAll('path[data-district-group-id]');
     
     // Update active filter button
     document.querySelectorAll('[id^="filter-"]').forEach(btn => {
         btn.classList.remove('ring-2', 'ring-blue-300');
     });
-    document.getElementById(`filter-${status}`).classList.add('ring-2', 'ring-blue-300');
+    const activeBtn = document.getElementById(`filter-${status}`);
+    if (activeBtn) activeBtn.classList.add('ring-2', 'ring-blue-300');
     
-    paths.forEach(path => {
-        const groupId = path.getAttribute('data-district-group-id');
-        // Try to match with district data using the same logic as other functions
-        const district = findDistrictByGroupId(groupId);
-        
-        if (status === 'all') {
-            // Show all districts
-            path.style.opacity = '1';
-        } else if (district && district.status === status) {
-            // Show matching districts
-            path.style.opacity = '1';
-        } else {
-            // Hide non-matching districts
-            path.style.opacity = '0.2';
-        }
-    });
+    if (currentMapLevel === 'district') {
+        const paths = svgElement.querySelectorAll('path[data-district-group-id]');
+        paths.forEach(path => {
+            const groupId = path.getAttribute('data-district-group-id');
+            const district = findDistrictByGroupId(groupId);
+            if (status === 'all') {
+                path.style.opacity = '1';
+            } else if (district && district.status === status) {
+                path.style.opacity = '1';
+            } else {
+                path.style.opacity = '0.2';
+            }
+        });
+    } else {
+        const groups = svgElement.querySelectorAll('g.province-group');
+        groups.forEach(group => {
+            const provinceName = group.getAttribute('data-province-name') || group.getAttribute('title') || group.getAttribute('id');
+            const agg = getProvinceAggregatedStatus(provinceName);
+            if (status === 'all') {
+                group.style.opacity = '1';
+            } else if (agg === status) {
+                group.style.opacity = '1';
+            } else {
+                group.style.opacity = '0.2';
+            }
+        });
+    }
 }
 
 /**
@@ -1224,7 +1592,9 @@ function getStatusText(status) {
         won: 'Alınan',
         negotiating: 'Görüşmesi Devam Eden',
         upcoming: 'İhaleye Çıkacak',
-        lost: 'Olumsuz'
+        lost: 'Olumsuz',
+        competitor: 'Rakip Firma',
+        terminated: 'Feshedildi'
     };
     return statusTexts[status] || status;
 }
@@ -1241,8 +1611,9 @@ function formatDate(dateString) {
  * Helper function to calculate remaining time
  */
 function calculateRemainingTime(startDate, duration) {
+    if (!startDate || !duration) return 'Bilinmiyor';
     const start = new Date(startDate);
-    const durationMonths = parseInt(duration.split(' ')[0]);
+    const durationMonths = parseInt(String(duration).split(' ')[0]) || 0;
     const endDate = new Date(start.setMonth(start.getMonth() + durationMonths));
     const now = new Date();
     const remaining = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24 * 30));
@@ -1257,13 +1628,25 @@ function calculateRemainingTime(startDate, duration) {
 /**
  * Show add tender modal
  */
-function showAddTenderModal() {
+function showAddTenderModal(scope = 'district') {
     const modal = document.getElementById('add-tender-modal');
     modal.classList.remove('hidden');
     
     // Set today's date as default
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('tender-date').value = today;
+    
+    // Make district input optional when adding on province scope
+    const districtInput = document.getElementById('tender-district');
+    if (districtInput) {
+        if (scope === 'province') {
+            districtInput.removeAttribute('required');
+            districtInput.placeholder = 'İl bazlı kayıt (opsiyonel)';
+        } else {
+            districtInput.setAttribute('required', 'true');
+            districtInput.placeholder = 'Örn: Maltepe';
+        }
+    }
     
     console.log('🎯 Add tender modal opened');
 }
@@ -1278,6 +1661,13 @@ function closeAddTenderModal() {
     // Reset form
     document.getElementById('add-tender-form').reset();
     
+    // Restore district field to required by default
+    const districtInput = document.getElementById('tender-district');
+    if (districtInput) {
+        districtInput.setAttribute('required', 'true');
+        districtInput.placeholder = 'Örn: Maltepe';
+    }
+    
     console.log('❌ Add tender modal closed');
 }
 
@@ -1291,10 +1681,11 @@ async function handleAddTenderSubmit(event) {
     
     // Get form values
     const province = document.getElementById('tender-province').value;
-    const district = document.getElementById('tender-district').value;
+    const district = document.getElementById('tender-district').value || '';
     const value = parseInt(document.getElementById('tender-value').value);
     const date = document.getElementById('tender-date').value;
     const description = document.getElementById('tender-description').value || 'Yeni ihale kaydı';
+    const competitorName = document.getElementById('tender-competitor-name')?.value || '';
     const status = document.getElementById('tender-status').value;
     
     // Generate a district ID - in real implementation this should match SVG data
@@ -1304,13 +1695,14 @@ async function handleAddTenderSubmit(event) {
         districtId: districtId,
         status: status,
         province: province,
-        district: district,
-        title: `${district} İhale Projesi`,
+        district: district || province,
+        title: `${district || province} İhale Projesi`,
         tender_duration: "24 ay", // Default duration
         cabin_count_total: Math.floor(value / 1000), // Estimate based on value
         cabin_count_full: 0,
         rental_fee: `₺${value.toLocaleString()}/ay`,
-        meeting_notes: description
+        meeting_notes: description,
+        ...(status === 'competitor' ? { competitor_name: competitorName } : {})
     };
     
     // Add status-specific fields
@@ -1338,7 +1730,7 @@ async function handleAddTenderSubmit(event) {
             console.log('✅ Tender added successfully, reloading data...');
             await fetchTendersData();
             await fetchDistrictsData();
-            initializeMap();
+            await loadSVGMap();
             closeAddTenderModal();
             
             // Show success message
@@ -1355,6 +1747,8 @@ async function handleAddTenderSubmit(event) {
 // Make functions globally available
 window.showAddTenderModal = showAddTenderModal;
 window.closeAddTenderModal = closeAddTenderModal;
+window.openEditTenderForDistrict = openEditTenderForDistrict;
+window.openEditTenderForProvince = openEditTenderForProvince;
 
 // Initialize modal event listeners when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
@@ -1364,6 +1758,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (addTenderForm) {
         addTenderForm.addEventListener('submit', handleAddTenderSubmit);
         console.log('📝 Add tender form event listener attached');
+    }
+    const editTenderForm = document.getElementById('edit-tender-form');
+    if (editTenderForm) {
+        editTenderForm.addEventListener('submit', handleEditTenderSubmit);
     }
     
     // Close modal when clicking outside
@@ -1477,6 +1875,102 @@ function openAddTenderForDistrict(groupId) {
             districtSelect.value = districtName;
         }
     }, 100);
+}
+
+/**
+ * Open edit modal for a district's latest tender
+ */
+function openEditTenderForDistrict(districtId) {
+    // Find latest tender for the district
+    const districtTenders = tendersData
+        .filter(t => t.districtId === districtId)
+        .sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at));
+    if (districtTenders.length === 0) return;
+    const tender = districtTenders[0];
+    populateAndShowEditModal(tender);
+}
+
+/**
+ * Open edit modal for a province-level record (pick latest tender in province)
+ */
+function openEditTenderForProvince(provinceName) {
+    const items = tendersData
+        .filter(t => normalizeName(t.province) === normalizeName(provinceName))
+        .sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at));
+    if (items.length === 0) return;
+    populateAndShowEditModal(items[0]);
+}
+
+function populateAndShowEditModal(tender) {
+    const modal = document.getElementById('edit-tender-modal');
+    if (!modal) return;
+    document.getElementById('edit-province').value = tender.province || '';
+    document.getElementById('edit-district').value = tender.district || '';
+    document.getElementById('edit-status').value = tender.status || '';
+    document.getElementById('edit-duration').value = tender.tender_duration || '';
+    document.getElementById('edit-rent').value = tender.rental_fee || '';
+    document.getElementById('edit-cabin-total').value = tender.cabin_count_total || 0;
+    document.getElementById('edit-cabin-full').value = tender.cabin_count_full || 0;
+    document.getElementById('edit-date').value = (tender.last_meeting_date || tender.foreseen_tender_date || '').split('T')[0] || '';
+    document.getElementById('edit-notes').value = tender.meeting_notes || '';
+    const compWrap = document.getElementById('edit-competitor-wrapper');
+    if (compWrap) {
+        if (tender.status === 'competitor') {
+            compWrap.classList.remove('hidden');
+            const comp = document.getElementById('edit-competitor-name');
+            if (comp) comp.value = tender.competitor_name || '';
+        } else {
+            compWrap.classList.add('hidden');
+        }
+    }
+    modal.dataset.tenderId = tender.id;
+    modal.classList.remove('hidden');
+}
+
+function closeEditTenderModal() {
+    const modal = document.getElementById('edit-tender-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function handleEditTenderSubmit(event) {
+    event.preventDefault();
+    const modal = document.getElementById('edit-tender-modal');
+    const tenderId = modal?.dataset.tenderId;
+    if (!tenderId) return;
+    const payload = {
+        province: document.getElementById('edit-province').value,
+        district: document.getElementById('edit-district').value,
+        status: document.getElementById('edit-status').value,
+        tender_duration: document.getElementById('edit-duration').value,
+        rental_fee: document.getElementById('edit-rent').value,
+        cabin_count_total: parseInt(document.getElementById('edit-cabin-total').value || '0'),
+        cabin_count_full: parseInt(document.getElementById('edit-cabin-full').value || '0'),
+        meeting_notes: document.getElementById('edit-notes').value
+    };
+    if (payload.status === 'upcoming') {
+        payload.foreseen_tender_date = document.getElementById('edit-date').value;
+    } else {
+        payload.last_meeting_date = document.getElementById('edit-date').value;
+    }
+    if (payload.status === 'competitor') {
+        payload.competitor_name = document.getElementById('edit-competitor-name').value;
+    }
+    try {
+        const res = await fetch(`${API_BASE_URL}/tenders/${tenderId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+        if (!res.ok || !result.success) throw new Error(result.message || 'Güncelleme hatası');
+        await fetchTendersData();
+        await fetchDistrictsData();
+        await loadSVGMap();
+        closeEditTenderModal();
+    } catch (e) {
+        console.error('Edit error:', e);
+        alert('❌ Güncellenemedi.');
+    }
 }
 
 /**
